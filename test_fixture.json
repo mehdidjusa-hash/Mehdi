@@ -1,0 +1,4 @@
+[
+  {"instrumentId":"TEST1","instrumentName":"نمونه‌الف","lastPrice":1040,"closingPrice":1035,"yesterdayPrice":1000,"tradeVolume":2000000,"tradeValue":8000000000,"minValue":980,"maxValue":1060},
+  {"instrumentId":"TEST2","instrumentName":"نمونه‌ب","lastPrice":990,"closingPrice":995,"yesterdayPrice":1000,"tradeVolume":100000,"tradeValue":100000000,"minValue":980,"maxValue":1010}
+]
