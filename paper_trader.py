@@ -3,6 +3,7 @@ import argparse, json, os, sqlite3, time, math
 from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 import learning_agent
+import requests
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -25,15 +26,15 @@ def normalize_items(payload):
     out=[]
     for x in items:
         if not isinstance(x, dict): continue
-        name=pick(x,'instrumentName','instrument_Name','lVal18AFC','symbol','name')
-        iid=pick(x,'instrumentId','instrumentid','insCode','insCode18')
-        last=num(pick(x,'lastPrice','lastprice','qTotTran5JAvg','price'))
-        close=num(pick(x,'closingPrice','closingprice','priceYesterday'))
-        prev=num(pick(x,'yesterdayPrice','yesterdayprice','priceYesterday'))
-        vol=num(pick(x,'tradeVolume','tradevolume','qTotTran5J')) or 0
-        value=num(pick(x,'tradeValue','tradevalue','qTotCap')) or 0
-        low=num(pick(x,'minValue','minvalue','priceMin'))
-        high=num(pick(x,'maxValue','maxvalue','priceMax'))
+        name=pick(x,'instrumentName','instrument_Name','lVal18AFC','symbol','name','l18')
+        iid=pick(x,'instrumentId','instrumentid','insCode','insCode18','id','isin')
+        last=num(pick(x,'lastPrice','lastprice','qTotTran5JAvg','price','pl'))
+        close=num(pick(x,'closingPrice','closingprice','priceYesterday','pc'))
+        prev=num(pick(x,'yesterdayPrice','yesterdayprice','priceYesterday','py'))
+        vol=num(pick(x,'tradeVolume','tradevolume','qTotTran5J','tvol')) or 0
+        value=num(pick(x,'tradeValue','tradevalue','qTotCap','tval')) or 0
+        low=num(pick(x,'minValue','minvalue','priceMin','pmin'))
+        high=num(pick(x,'maxValue','maxvalue','priceMax','pmax'))
         if iid and name and last and last > 0:
             out.append({'id':str(iid),'name':str(name),'last':last,'close':close or last,'prev':prev or close or last,'volume':vol,'value':value,'low':low,'high':high,'observed_at':now()})
     return out
@@ -41,8 +42,19 @@ def normalize_items(payload):
 def fetch_market(cfg, fixture=None):
     if fixture:
         with open(fixture, encoding='utf-8') as f: return normalize_items(json.load(f))
-    req = Request(cfg['market_watch_url'], headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'})
-    with urlopen(req, timeout=20) as r: return normalize_items(json.loads(r.read().decode('utf-8-sig')))
+    urls=[cfg['market_watch_url'], 'https://webgw.tse.ir/InstrumentProvider/api/v1/MarketWatch/MarketWatchCash/fa', 'https://cdn.tsetmc.com/api/ClosingPrice/GetMarketWatch']
+    brs_key=os.environ.get('BRS_API_KEY','').strip()
+    if brs_key: urls.append(f'https://api.brsapi.ir/Tsetmc/AllSymbols.php?key={brs_key}&type=1')
+    last_error=None
+    for url in dict.fromkeys(urls):
+        for verify in (True, False):
+            try:
+                r=requests.get(url,headers={'User-Agent':'Mozilla/5.0','Accept':'application/json'},timeout=25,verify=verify)
+                r.raise_for_status(); rows=normalize_items(r.json())
+                if rows: return rows
+                last_error=f'{url}: empty response'
+            except Exception as e: last_error=f'{url}: {e}'
+    raise RuntimeError(f'All market-data endpoints failed: {last_error}')
 
 def setup_db(cfg, db_path=None):
     os.makedirs(os.path.join(ROOT,cfg['data_dir']), exist_ok=True)
@@ -126,11 +138,13 @@ def run_once(cfg, con, fixture=None):
     print(json.dumps(result,ensure_ascii=False)); return result
 
 def main():
-    ap=argparse.ArgumentParser(); ap.add_argument('--once',action='store_true'); ap.add_argument('--poll-seconds',type=int); ap.add_argument('--fixture'); ap.add_argument('--db')
+    ap=argparse.ArgumentParser(); ap.add_argument('--once',action='store_true'); ap.add_argument('--poll-seconds',type=int); ap.add_argument('--fixture'); ap.add_argument('--db'); ap.add_argument('--strict',action='store_true')
     args=ap.parse_args(); cfg=load_config(); con=setup_db(cfg,args.db); interval=args.poll_seconds or cfg['poll_seconds']
     while True:
         try: run_once(cfg,con,args.fixture)
-        except Exception as e: print(json.dumps({'error':str(e),'hypothetical':True},ensure_ascii=False))
+        except Exception as e:
+            print(json.dumps({'error':str(e),'hypothetical':True},ensure_ascii=False))
+            if args.strict: raise
         if args.once: break
         time.sleep(interval)
 
