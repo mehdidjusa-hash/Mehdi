@@ -1,0 +1,15 @@
+{
+  "initial_cash_rial": 50000000,
+  "market_watch_url": "https://webgw.tse.ir/InstrumentProvider/api/v1/MarketWatch/MarketWatchCash/fa",
+  "poll_seconds": 60,
+  "stale_after_seconds": 180,
+  "max_positions": 4,
+  "max_risk_per_trade_fraction": 0.01,
+  "max_daily_loss_fraction": 0.03,
+  "fee_rate": 0.0037,
+  "slippage_bps": 25,
+  "min_trade_value_rial": 1000000,
+  "min_score": 0.58,
+  "data_dir": "data",
+  "report_dir": "reports"
+}
