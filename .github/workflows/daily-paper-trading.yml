@@ -1,0 +1,43 @@
+name: Daily Iran Market Paper Trading
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:30 Tehran (UTC+03:30), Saturday through Wednesday.
+    # Exchange holidays are not encoded; no real orders are ever sent.
+    - cron: '0 6 * * 0-3,6'
+
+permissions:
+  contents: read
+
+env:
+  TZ: Asia/Tehran
+  BRS_API_KEY: ${{ secrets.BRS_API_KEY }}
+
+jobs:
+  paper-trading:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run one daily market snapshot
+        run: |
+          mkdir -p data reports
+          python paper_trader.py --once --strict --db data/paper.db
+      - name: Upload daily report and state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iran-paper-trading-${{ github.run_id }}
+          path: |
+            reports/
+            data/paper.db
+          if-no-files-found: warn
+          retention-days: 30
